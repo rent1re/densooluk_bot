@@ -101,17 +101,26 @@ def get_full_news(link):
                 if jpg_tag:
                     image_url = urljoin(BASE_URL, jpg_tag["href"])
 
+        object_tag = soup.find("object", class_="embed-responsive-item")
+        youtube_link = object_tag["data"] if object_tag and object_tag.get("data") else None
+        if youtube_link and youtube_link.startswith("//"):
+            youtube_link = "https:" + youtube_link
+
         print(f"Изображение найдено: {image_url}")
-        return full_text, image_url
+        return full_text, image_url, youtube_link
     except Exception as e:
         print(f"Ошибка при получении полной новости: {e}")
         return "Текст не найден.", None
+
+
+
 
 # Функция для отправки новости с кнопками
 # Функция для отправки новости с кнопками
 def send_to_telegram(news):
     try:
-        full_text, image_url = get_full_news(news['link'])
+        # Получаем полный текст, URL изображения и YouTube-ссылку
+        full_text, image_url, youtube_link = get_full_news(news['link'])
 
         # Формируем сообщение
         message = f"🔔 *{news['title']}*\n\n{full_text}"
@@ -126,15 +135,23 @@ def send_to_telegram(news):
         # Кнопка "Читать полностью"
         keyboard.add(types.InlineKeyboardButton("Читать полностью", url=news['link']))
 
+        # Добавляем кнопку "Смотреть видео", если есть YouTube-ссылка
+        if youtube_link:
+            keyboard.add(types.InlineKeyboardButton("Смотреть видео", url=youtube_link))
+
         # Убедимся, что данные для кнопок короткие и допустимые
         like_data = f"like:{news['link'][:50]}"  # Ограничиваем длину ссылки для callback_data
         dislike_data = f"dislike:{news['link'][:50]}"  # Ограничиваем длину ссылки для callback_data
 
         # Кнопки лайка и дизлайка
         keyboard.row(
-            types.InlineKeyboardButton("👍 ", callback_data=like_data),
-            types.InlineKeyboardButton("👎 ", callback_data=dislike_data)
+            types.InlineKeyboardButton("👍 Лайк", callback_data=like_data),
+            types.InlineKeyboardButton("👎 Дизлайк", callback_data=dislike_data)
         )
+
+        # Добавляем YouTube-ссылку в сообщение, если она доступна
+        if youtube_link:
+            message += f"\n [⠀]({youtube_link})"
 
         # Отправляем сообщение с изображением, если доступно
         if image_url:
@@ -146,10 +163,21 @@ def send_to_telegram(news):
             with open(image_path, 'rb') as img:
                 # Убедимся, что длина caption не превышает 1024 символа
                 caption = message[:1024]  # Обрезаем caption до максимального размера
-                bot.send_photo(chat_id=CHAT_ID, photo=img, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+                bot.send_photo(
+                    chat_id=CHAT_ID,
+                    photo=img,
+                    caption=caption,
+                    parse_mode="Markdown",
+                    reply_markup=keyboard
+                )
             os.remove(image_path)
         else:
-            bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown", reply_markup=keyboard)
+            bot.send_message(
+                chat_id=CHAT_ID,
+                text=message,
+                parse_mode="Markdown",
+                reply_markup=keyboard
+            )
 
         print("Новость успешно отправлена!")
     except Exception as e:
@@ -181,7 +209,7 @@ def check_for_new_news():
     while True:
         news_list = parse_actual_news()
         if news_list:
-            latest_news = news_list['news_3 ']  # Выбор новости news_1, news_2, news_3
+            latest_news = news_list['news_2']  # Выбор новости news_1, news_2, news_3
             if latest_news['link'] != last_news_link:  # Если это новая новость
                 last_news_link = latest_news['link']
                 send_to_telegram(latest_news)  # Отправляем новость
@@ -190,24 +218,6 @@ def check_for_new_news():
         else:
             print("Не удалось получить список новостей.")
         time.sleep(300)  # Проверяем каждые 5 минут
-
-# Обработчик команды /news
-@bot.message_handler(commands=['news'])
-def send_last_news(message):
-    news_list = parse_actual_news()
-    if news_list:
-        send_to_telegram(news_list[0])  # Отправляем последнюю новость
-    else:
-        bot.reply_to(message, "Нет доступных новостей для публикации.")
-
-# Обработчик команды /news2
-@bot.message_handler(commands=['news2'])
-def send_second_last_news(message):
-    news_list = parse_actual_news()
-    if len(news_list) > 1:
-        send_to_telegram(news_list[1])  # Отправляем предпоследнюю новость
-    else:
-        bot.reply_to(message, "Недостаточно новостей для публикации предпоследней.")
 
 # Основной запуск
 if __name__ == "__main__":
@@ -218,4 +228,3 @@ if __name__ == "__main__":
 
     # Запуск бота для обработки команд
     bot.polling()
-
