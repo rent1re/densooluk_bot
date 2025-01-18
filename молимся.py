@@ -87,16 +87,17 @@ def get_full_news(link):
             full_text = full_text[:3000] + "..."
 
         # Извлекаем изображение с секции 'active' (из блока с классом 'sppb-item active')
-        active_item = soup.find("div", class_="carousel-item active")
+        active_items = soup.find("div", class_=["carousel-item active", "pull-none entry-image full-image"])
+
         image_url = None
-        if active_item:
+        if active_items:
             # Поиск как изображения <img>, так и ссылок на файлы .jpg
-            image_tag = active_item.find("img")
+            image_tag = active_items.find("img")
             if image_tag:
                 image_url = urljoin(BASE_URL, image_tag["src"])
             else:
                 # Ищем прямые ссылки на изображения .jpg
-                jpg_tag = active_item.find("a", href=lambda href: href and href.endswith('.jpg'))
+                jpg_tag = active_items.find("a", href=lambda href: href and href.endswith('.jpg'))
                 if jpg_tag:
                     image_url = urljoin(BASE_URL, jpg_tag["href"])
 
