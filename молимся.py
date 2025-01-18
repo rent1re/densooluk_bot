@@ -28,15 +28,19 @@ def parse_actual_news():
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Находим блок "Актуальное"
-        actual_section = soup.find("div", class_="sppb-col-xs-6 sppb-col-sm-4 sppb-col-md-4 sppb-col-lg-4 sppb-col-12")
+        actual_section = soup.find("section",{"id": "section-id-0b9a719f-99c7-4297-8b1c-1b04ab4a3036"})
         if not actual_section:
             print("Секция 'Актуальное' не найдена.")
-            return []
+            return {}
 
         # Находим статьи в блоке "Актуальное"
         articles = actual_section.find_all("div", class_="sppb-addon-article")
-        news_list = []
-        for article in articles:
+
+        # Словарь для хранения новостей
+        news_dict = {}
+
+        # Проверяем наличие каждой из новостей
+        for i, article in enumerate(articles[:3]):  # Ограничиваем до трех первых новостей
             title_tag = article.find("h3")
             if not title_tag:
                 continue
@@ -46,13 +50,15 @@ def parse_actual_news():
             link = urljoin(BASE_URL, link_tag["href"]) if link_tag else None
 
             if title and link:
-                news_list.append({"title": title, "link": link})
+                news_dict[f"news_{i + 1}"] = {"title": title, "link": link}
 
-        print(f"Найдено {len(news_list)} новостей.")
-        return news_list
+        print(f"Найдено {len(news_dict)} новостей.")
+        print(news_dict)
+        return news_dict
     except Exception as e:
         print(f"Ошибка при парсинге 'Актуального': {e}")
-        return []
+        return {}
+
 
 # Функция для получения полной информации о новости
 def get_full_news(link):
@@ -174,7 +180,7 @@ def check_for_new_news():
     while True:
         news_list = parse_actual_news()
         if news_list:
-            latest_news = news_list[0]  # Последняя новость
+            latest_news = news_list['news_1']  # Выбор новости news_1, news_2, news_3
             if latest_news['link'] != last_news_link:  # Если это новая новость
                 last_news_link = latest_news['link']
                 send_to_telegram(latest_news)  # Отправляем новость
