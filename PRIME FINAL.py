@@ -5,7 +5,7 @@ import os
 from urllib.parse import urljoin
 import time
 import threading
-
+""!@#@!#@!#!@#@!#@"""
 # Настройки
 BASE_URL = "https://densooluk.media"
 TELEGRAM_BOT_TOKEN = "8091170439:AAHKq94yW985dM-Xa0ERxj-t5UQD3sP9Wt8"
