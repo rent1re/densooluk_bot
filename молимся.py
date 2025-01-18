@@ -101,6 +101,7 @@ def get_full_news(link):
         return "Текст не найден.", None
 
 # Функция для отправки новости с кнопками
+# Функция для отправки новости с кнопками
 def send_to_telegram(news):
     try:
         full_text, image_url = get_full_news(news['link'])
@@ -136,7 +137,9 @@ def send_to_telegram(news):
                 f.write(image_response.content)
 
             with open(image_path, 'rb') as img:
-                bot.send_photo(chat_id=CHAT_ID, photo=img, caption=message, parse_mode="Markdown", reply_markup=keyboard)
+                # Убедимся, что длина caption не превышает 1024 символа
+                caption = message[:1024]  # Обрезаем caption до максимального размера
+                bot.send_photo(chat_id=CHAT_ID, photo=img, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
             os.remove(image_path)
         else:
             bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown", reply_markup=keyboard)
