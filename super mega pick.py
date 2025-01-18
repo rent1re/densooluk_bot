@@ -22,7 +22,7 @@ bot = TeleBot(TELEGRAM_BOT_TOKEN)
 # Глобальные переменные для хранения лайков и дизлайков
 likes = set()
 dislikes = set()
-
+last_action_time = {}
 # Функция для парсинга списка новостей из "Актуального"
 def parse_actual_news():
     try:
@@ -136,11 +136,23 @@ def create_keyboard(news_link, youtube_link):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    global likes, dislikes
+    global likes, dislikes, last_action_time
 
     user_id = call.from_user.id
+    current_time = time.time()  # Текущее время в секундах
 
     try:
+        # Проверка, прошло ли 10 секунд с последнего действия пользователя
+        if user_id in last_action_time:
+            elapsed_time = current_time - last_action_time[user_id]
+            if elapsed_time < 10:
+                # Если прошло меньше 10 секунд, игнорируем запрос
+                bot.answer_callback_query(call.id, "Подождите 10 секунд перед повторным нажатием.", show_alert=True)
+                return
+
+        # Обновляем временную метку последнего действия пользователя
+        last_action_time[user_id] = current_time
+
         # Проверка типа callback_data
         if call.data.startswith('like:'):
             if user_id not in likes:
@@ -173,14 +185,31 @@ def callback_query(call):
                         news_link = button.url
 
         # Генерация новой клавиатуры с обновленными счетчиками
-        keyboard = create_keyboard(news_link=news_link, youtube_link=youtube_link)
+        new_keyboard = create_keyboard(news_link=news_link, youtube_link=youtube_link)
 
-        # Обновление сообщения с новой клавиатурой
-        bot.edit_message_reply_markup(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            reply_markup=keyboard
-        )
+        # Проверка изменения текста и клавиатуры
+        updated_message = False
+
+        # Проверка изменения клавиатуры
+        if current_markup.keyboard != new_keyboard.keyboard:
+            updated_message = True
+
+        # Проверка изменения текста
+        current_text = call.message.text
+        updated_text = f"🔔 *{call.message.text}*"
+
+        if current_text != updated_text:
+            updated_message = True
+
+        # Обновляем сообщение только если произошли изменения
+        if updated_message:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=new_keyboard
+            )
+
+        print("Сообщение обновлено!")
 
     except Exception as e:
         print(f"Ошибка в обработке callback_query: {e}")
@@ -189,8 +218,14 @@ def callback_query(call):
 
 
 
-COMMENTS_BOT_ID = "@CommentsBot"  # Укажите username бота CommentsBot
+# Функция для отправки текста для папы
+def send_text_for_comm():
+        text_for_comm = "Комментарии."
+        # Отправляем сообщение в тот же чат (или другой, если нужно)
+        bot.send_message(chat_id=CHAT_ID, text=text_for_comm, parse_mode="Markdown")
 
+
+# Функция для отправки новостей
 def send_to_telegram(news):
     try:
         full_text, image_url, youtube_link = get_full_news(news['link'])
@@ -199,16 +234,15 @@ def send_to_telegram(news):
             message = message[:4096 - 50] + "..."
 
         keyboard = create_keyboard(news['link'], youtube_link)
-
-        sent_message = None  # Для хранения ID отправленного сообщения
-
+        if youtube_link:
+            message += f"\n [⠀]({youtube_link})"
         if image_url:
             image_response = requests.get(image_url)
             with open("temp_image.jpg", 'wb') as f:
                 f.write(image_response.content)
 
             with open("temp_image.jpg", 'rb') as img:
-                sent_message = bot.send_photo(
+                bot.send_photo(
                     chat_id=CHAT_ID,
                     photo=img,
                     caption=message[:1024],
@@ -217,7 +251,7 @@ def send_to_telegram(news):
                 )
             os.remove("temp_image.jpg")
         else:
-            sent_message = bot.send_message(
+            bot.send_message(
                 chat_id=CHAT_ID,
                 text=message,
                 parse_mode="Markdown",
@@ -226,16 +260,12 @@ def send_to_telegram(news):
 
         print("Новость успешно отправлена!")
 
-        # Пересылаем сообщение в CommentsBot
-        if sent_message:
-            bot.forward_message(
-                chat_id=COMMENTS_BOT_ID,
-                from_chat_id=CHAT_ID,
-                message_id=sent_message.message_id
-            )
-            print("Сообщение переслано в CommentsBot!")
+        # После отправки новости отправляем текст для папы
+        send_text_for_comm()
+
     except Exception as e:
         print(f"Ошибка при отправке сообщения: {e}")
+
 
 # Функция для проверки новых новостей
 def check_for_new_news():
